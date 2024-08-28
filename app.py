@@ -1,6 +1,7 @@
-from flask import Flask, request, render_template
+from flask import Flask, jsonify, request,render_template
 
 app = Flask(__name__)
+
 
 @app.route('/')
 def home():
@@ -8,6 +9,13 @@ def home():
 
 @app.route('/hello')
 def hello():
-    return "Hello, I'm still alive!"
+    return jsonify(message="Hello, World!")
 
-app.run(port=5000, debug=True, host='0.0.0.0')
+@app.route('/add', methods=['POST'])
+def add():
+    data = request.get_json()
+    result = data['a'] + data['b']
+    return jsonify(result=result)
+
+if __name__ == '__main__':
+    app.run(debug=True)

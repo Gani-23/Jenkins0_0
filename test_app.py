@@ -1,15 +1,17 @@
-# test_app.py
 import pytest
-from app import app  # Import your Flask app here
+from app import app
 
 @pytest.fixture
 def client():
     app.testing = True
-    with app.test_client() as client:
-        yield client
+    return app.test_client()
 
-def test_hello(client):
-    """Test the /hello route."""
+def test_home(client):
     response = client.get('/hello')
     assert response.status_code == 200
-    assert b"Hello, I'm still alive!" in response.data
+    assert response.json == {'message': 'Hello, World!'}
+
+def test_add(client):
+    response = client.post('/add', json={'a': 1, 'b': 2})
+    assert response.status_code == 200
+    assert response.json == {'result': 3}
