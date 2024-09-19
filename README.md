@@ -15,90 +15,72 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - main
-      - staging
       - master
-  workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
     steps:
+      - name: Acknowledging Stage Env
+        run: |
+          echo "----This change is meant for Stage.-----"
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'  # Specify the Python version
-
+          python-version: '3.x' 
+      
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
+          echo "------Installing Dependencies------"
+          pip install --upgrade pip
+          pip install flask pytest
+          echo "------Completed Installing Dependencies-------"
       - name: Run tests
         run: |
-          pytest --maxfail=1 --disable-warnings -q
-
+          echo "-------Running Test Script-------"
+          pytest --disable-warnings -q
       - name: Build Application
         run: |
-          echo "Building application..."
-
-  generate_tag:
+          echo "-------Building application-------"
+  stage-deploy:
+    needs: [test]
     runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
-      - name: Generate Unique Tag
-        id: generate_tag
-        run: |
-          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
-          UNIQUE_TAG="v${TIMESTAMP}"
-          echo "Generated tag: $UNIQUE_TAG"
-          echo "TAG=$UNIQUE_TAG" >> $GITHUB_ENV
-
-      - name: Create and Push Tag
-        run: |
-          git tag $TAG
-          git push origin $TAG
-
-  deploy_staging:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/staging'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy to Staging
-        run: |
-          echo "Deploying to Staging..."
-  
-  deploy_master:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/master'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy to Staging
-        run: |
-          echo "Deploying to master..."
-
-  deploy_production:
-    runs-on: ubuntu-latest
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Deploy to Production
-        run: |
-          echo "Deploying to Production..."
+      - name: Checking Stage Release & Configuring libraries
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST_STG }}
+          username: ${{ secrets.EC2_USERNAME_STG }}
+          key: ${{ secrets.EC2_SSH_KEY_STG }}
+          port: 22
+          script: |
+            echo "-------This is New Release preparing for stage rollout.-------- "
+            sudo apt-get update
+            sudo apt update
+            sudo apt install python -y
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3
+            sudo apt install python3-pip -y
+            sudo apt install nginx -y
+            pip install flask pytest
+      - name: Deploying App in STAGE
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST_STG }}
+          username: ${{ secrets.EC2_USERNAME_STG }}
+          key: ${{ secrets.EC2_SSH_KEY_STG }}
+          port: 22
+          source: ./
+          target: ./
+          script: |
+            echo "Deploying App in STAGE"
+            sudo rm -rf  /etc/nginx/sites-available/default
+            sudo cp /home/ubuntu/default /etc/nginx/sites-available/
+            sudo systemctl restart nginx
+            cd /home/ubuntu/Jenkins0_0
+            python3 app.py
 ```
 
 ### Jenkinsfile file to do stage work
